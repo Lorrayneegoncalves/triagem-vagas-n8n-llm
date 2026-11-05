@@ -1,0 +1,252 @@
+{
+  "name": "Triagem de vagas v1",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Triagem de vagas com IA",
+        "formDescription": "Cole o texto de uma vaga pública e receba o resumo, os requisitos, a aderência e os riscos.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Texto da vaga",
+              "fieldType": "textarea",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Link da vaga"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        -368,
+        0
+      ],
+      "id": "30b82d6b-8ed5-4672-a35c-dd6858254724",
+      "name": "On form submission"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Você analisa vagas de emprego para uma candidata fictícia com\neste perfil: analista júnior com conhecimento em SQL, Power BI,\nPython básico, automação com ferramentas no-code e experiência\ncom documentação e processos.\n\nDada a vaga abaixo, responda APENAS com JSON válido, sem texto\nantes ou depois, com estes campos:\n- empresa\n- cargo\n- resumo (2 frases)\n- requisitos (lista dos principais)\n- aderencia (lista de objetos com \"requisito\" e \"status\",\n  onde status é: atende, parcial, nao_atende ou indeterminado)\n- riscos (lista)\n- observacoes\n\nRegras: não invente informações que não estejam na vaga.\nSe algo não estiver claro, use \"indeterminado\"."
+            },
+            {
+              "content": "={{ $json['Texto da vaga'] }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        -80,
+        0
+      ],
+      "id": "81d28930-4439-4ace-8da3-592190e780a4",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = [];\nfor (const item of $input.all()) {\n  const raw = item.json.output[0].content[0].text;\n  const clean = raw.replace(/```json/gi, '').replace(/```/g, '').trim();\n  let d;\n  try {\n    d = JSON.parse(clean);\n  } catch (e) {\n    d = { observacoes: 'JSON inválido: ' + raw.slice(0, 200) };\n  }\n  const form = $('On form submission').first().json;\n  const lista = (v) => Array.isArray(v) ? v.join('; ') : (v ?? '');\n  const aderencia = Array.isArray(d.aderencia)\n    ? d.aderencia.map(a => `${a.requisito}: ${a.status}`).join('; ')\n    : (d.aderencia ?? '');\n  results.push({ json: {\n    data: new Date().toLocaleDateString('pt-BR'),\n    empresa: d.empresa ?? '',\n    cargo: d.cargo ?? '',\n    resumo: d.resumo ?? '',\n    requisitos: lista(d.requisitos),\n    aderencia,\n    riscos: lista(d.riscos),\n    observacoes: d.observacoes ?? '',\n    link: form['Link da vaga'] ?? ''\n  }});\n}\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        256,
+        0
+      ],
+      "id": "184c1eda-2f04-48af-9819-b858b7699282",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "COLE_AQUI_O_ID_DA_SUA_PLANILHA",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Triagem de vagas",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "data",
+              "displayName": "data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "empresa",
+              "displayName": "empresa",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "cargo",
+              "displayName": "cargo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "resumo",
+              "displayName": "resumo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "requisitos",
+              "displayName": "requisitos",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "aderencia",
+              "displayName": "aderencia",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "riscos",
+              "displayName": "riscos",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "observacoes",
+              "displayName": "observacoes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "link",
+              "displayName": "link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        544,
+        0
+      ],
+      "id": "1eadaeb2-a44e-4563-af8e-2972eb17b423",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": [],
+  "tags": []
+}

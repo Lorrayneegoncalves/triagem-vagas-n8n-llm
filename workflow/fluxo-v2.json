@@ -1,0 +1,272 @@
+{
+  "name": "Triagem de vagas v2",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Triagem de vagas com IA",
+        "formDescription": "Cole o texto de uma vaga pública e receba o resumo, os requisitos, a aderência e os riscos.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Texto da vaga",
+              "fieldType": "textarea",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Link da vaga"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        -368,
+        0
+      ],
+      "id": "30b82d6b-8ed5-4672-a35c-dd6858254724",
+      "name": "On form submission"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-5-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-5-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Você analisa vagas de emprego para uma candidata fictícia.\n\nPerfil da candidata:\n- Ensino superior em andamento: cursando Sistemas de\n  Informação (ainda não concluído)\n- SQL: básico a intermediário (joins, agregações e filtros)\n- Power BI: básico\n- Excel: intermediário\n- Python: básico, para análise de dados\n- Automação com ferramentas no-code\n- Documentação e processos\n- Inglês: básico\n- Mora em São Paulo. Aceita trabalho remoto ou híbrido na\n  própria cidade e não pode se mudar.\n\nTarefa: analise a vaga enviada e responda SOMENTE com um objeto\nJSON válido. Não use blocos de código, markdown nem texto antes\nou depois do JSON.\n\nCampos:\n- empresa\n- cargo\n- local_modelo: cidade e modelo de trabalho (remoto, híbrido ou\n  presencial), ou \"indeterminado\"\n- resumo: 2 frases sobre o cargo e suas principais atividades.\n  Não descreva a empresa\n- requisitos: lista de TODOS os requisitos obrigatórios que a\n  vaga apresenta, inclusive os listados em seções como\n  \"requisitos\", \"observações\" ou \"exigências\", mais formação,\n  experiência mínima e idioma exigidos. Não omita nenhum\n- diferenciais: somente os itens que a vaga marca expressamente\n  como desejáveis, diferenciais ou opcionais. Nunca mova\n  requisitos obrigatórios para este campo. Se a vaga não tiver\n  essa seção, devolva uma lista vazia\n- aderencia: um objeto para CADA item de \"requisitos\", sem pular\n  nenhum, com \"requisito\", \"justificativa\" (uma frase baseada no\n  perfil acima) e, depois dela, \"status\" (atende, parcial,\n  nao_atende ou indeterminado). Escreva a justificativa antes\n  de decidir o status\n- riscos: lista de objetos com \"risco\" e \"trecho_da_vaga\"\n- observacoes\n\nRegras:\n1. Use somente informações escritas na vaga e no perfil. Não\n   invente exigências, locais ou condições.\n2. Se o perfil não menciona uma habilidade ou experiência\n   exigida, o status é SEMPRE \"indeterminado\", sem exceção, e a\n   justificativa diz que o perfil não informa. Use \"nao_atende\"\n   apenas quando o perfil indicar o contrário (por exemplo,\n   inglês básico para uma exigência de inglês avançado, ou\n   formação em andamento para uma exigência de formação\n   completa).\n3. Liste um risco para CADA item de aderencia com status\n   nao_atende, e somente para eles. Não crie risco para itens\n   \"indeterminado\". Cada risco descreve apenas a diferença entre\n   a vaga e o perfil, sem prever consequências. Liste também um\n   risco de localização, mas somente se a vaga for presencial ou\n   híbrida, ou disser explicitamente que exige morar na cidade.\n   Se a vaga for remota ou home office sem essa exigência, não\n   há risco de localização. Cada risco deve citar o trecho da\n   vaga. Se não houver nenhum, devolva uma lista vazia.\n4. Considere localização e modelo de trabalho ao avaliar a\n   aderência."
+            },
+            {
+              "content": "={{ $json['Texto da vaga'] }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        -80,
+        0
+      ],
+      "id": "81d28930-4439-4ace-8da3-592190e780a4",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = [];\nfor (const item of $input.all()) {\n  const raw = item.json.output[0].content[0].text;\n  const clean = raw.replace(/```json/gi, '').replace(/```/g, '').trim();\n  let d;\n  try {\n    d = JSON.parse(clean);\n  } catch (e) {\n    d = { observacoes: 'JSON inválido: ' + raw.slice(0, 200) };\n  }\n  const form = $('On form submission').first().json;\n  const lista = (v) => Array.isArray(v) ? v.join('\\n') : (v ?? '');\n  const aderencia = Array.isArray(d.aderencia)\n    ? d.aderencia.map(a => `${a.requisito}: ${a.status} (${a.justificativa ?? ''})`).join('\\n')\n    : (d.aderencia ?? '');\n  const riscos = Array.isArray(d.riscos)\n    ? d.riscos.map(r => typeof r === 'string' ? r : `${r.risco} [trecho: \"${r.trecho_da_vaga ?? ''}\"]`).join('\\n')\n    : (d.riscos ?? '');\n  results.push({ json: {\n    data: new Date().toLocaleDateString('pt-BR'),\n    empresa: d.empresa ?? '',\n    cargo: d.cargo ?? '',\n    resumo: d.resumo ?? '',\n    requisitos: lista(d.requisitos),\n    aderencia,\n    riscos,\n    observacoes: d.observacoes ?? '',\n    link: form['Link da vaga'] ?? '',\n    local_modelo: d.local_modelo ?? '',\n    diferenciais: lista(d.diferenciais)\n  }});\n}\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        256,
+        0
+      ],
+      "id": "184c1eda-2f04-48af-9819-b858b7699282",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "COLE_AQUI_O_ID_DA_SUA_PLANILHA",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Triagem de vagas",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "data",
+              "displayName": "data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "empresa",
+              "displayName": "empresa",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "cargo",
+              "displayName": "cargo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "resumo",
+              "displayName": "resumo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "requisitos",
+              "displayName": "requisitos",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "aderencia",
+              "displayName": "aderencia",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "riscos",
+              "displayName": "riscos",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "observacoes",
+              "displayName": "observacoes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "link",
+              "displayName": "link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "local_modelo",
+              "displayName": "local_modelo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "diferenciais",
+              "displayName": "diferenciais",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        544,
+        0
+      ],
+      "id": "1eadaeb2-a44e-4563-af8e-2972eb17b423",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": [],
+  "tags": []
+}
